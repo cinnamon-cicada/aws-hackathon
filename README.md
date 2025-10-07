@@ -30,7 +30,7 @@ pip install -r requirements.txt
 
 ## Running the App
 
-1. Run `python app.py`
+1. Run `streamlit run app.py`
 2. Insert Mapbox API key (get an account here: https://console.mapbox.com/)
 
 ## Pulling Updates
@@ -65,3 +65,7 @@ git commit -m "Describe your changes"
 ## License
 
 This project is licensed under the MIT License.
+
+
+# ASSUMPTIONS
+1. 

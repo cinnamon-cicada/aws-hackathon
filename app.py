@@ -1,117 +1,152 @@
 import streamlit as st
 import streamlit.components.v1 as components
-import json
-import random
+import json, random, time
+from density import load_population_density, high_density_coordinates
+from utils import generate_nashville_buildings
+from alert_system import alert_system, trigger_100_level_alert
 
-# Set page config
+# ───────────────────────────────────────────────
+# STREAMLIT PAGE CONFIG
+# ───────────────────────────────────────────────
 st.set_page_config(page_title="EMS Urgency Map - Nashville", layout="wide")
 
-def get_urgency(lat, lon, population_density=None):
-    """
-    Calculate urgency level based on population density.
-    Returns urgency score (0-100) and color code.
-    
-    In a real implementation, this would query actual population data.
-    For demo purposes, we simulate varying density across Nashville.
-    """
+# ───────────────────────────────────────────────
+# URGENCY FUNCTION
+# ───────────────────────────────────────────────
+def get_urgency(lat, lon, population_density=None, alert_severity=None):
+    """Calculate urgency level based on population density and alert severity."""
     if population_density is None:
-        # Simulate population density based on proximity to downtown Nashville (36.1627, -86.7816)
         downtown_lat, downtown_lon = 36.1627, -86.7816
         distance = ((lat - downtown_lat)**2 + (lon - downtown_lon)**2)**0.5
-        
-        # Higher density closer to downtown
         population_density = max(0, 5000 - (distance * 10000)) + random.uniform(-500, 500)
-    
-    # Calculate urgency score (0-100)
-    if population_density > 4000:
+
+    # Use alert severity if available, otherwise calculate from population density
+    if alert_severity is not None:
+        urgency = alert_severity
+        if urgency >= 100:
+            color = "#d32f2f"  # Red for 100-level alerts
+        elif urgency >= 90:
+            color = "#d32f2f"  # Red
+        elif urgency >= 70:
+            color = "#f57c00"  # Orange
+        elif urgency >= 50:
+            color = "#fbc02d"  # Yellow
+        else:
+            color = "#388e3c"  # Green
+    elif population_density > 4000:
         urgency = 90 + random.uniform(0, 10)
-        color = "#d32f2f"  # Red - Critical
+        color = "#d32f2f"  # Red
     elif population_density > 2500:
         urgency = 70 + random.uniform(0, 15)
-        color = "#f57c00"  # Orange - High
+        color = "#f57c00"  # Orange
     elif population_density > 1000:
         urgency = 50 + random.uniform(0, 15)
-        color = "#fbc02d"  # Yellow - Medium
+        color = "#fbc02d"  # Yellow
     else:
         urgency = 20 + random.uniform(0, 20)
-        color = "#388e3c"  # Green - Low
-    
+        color = "#388e3c"  # Green
     return round(urgency, 1), color
 
-# Generate sample building data for Nashville
-def generate_nashville_buildings():
-    """Generate sample building locations across Nashville"""
-    buildings = []
-    # Nashville bounds approximately
-    lat_min, lat_max = 36.10, 36.22
-    lon_min, lon_max = -86.85, -86.70
+# ───────────────────────────────────────────────
+# ALERT SIMULATION
+# ───────────────────────────────────────────────
+def simulate_alert_updates():
+    """Simulate alert updates for demonstration purposes"""
+    # Update drone coordinates
+    alert_system.update_drone_coordinates(36.1627, -86.7816, altitude=100)
     
-    # Generate grid of buildings
-    for i in range(50):
-        lat = random.uniform(lat_min, lat_max)
-        lon = random.uniform(lon_min, lon_max)
-        urgency, color = get_urgency(lat, lon)
-        
-        buildings.append({
-            "lat": lat,
-            "lon": lon,
-            "urgency": urgency,
-            "color": color,
-            "name": f"Building {i+1}"
-        })
-    
-    return buildings
+    # Simulate random alert generation
+    if random.random() < 0.1:  # 10% chance per refresh
+        alert = trigger_100_level_alert(
+            human_detected=random.choice([True, False]),
+            population_density=random.uniform(3000, 5000)
+        )
+        if alert:
+            st.toast(f"🚨 New Alert: {', '.join(alert['conditions'])}", icon="🚨")
 
-# Streamlit UI
+# ───────────────────────────────────────────────
+# STREAMLIT UI
+# ───────────────────────────────────────────────
 st.title("🚑 EMS Urgency Map - Nashville, TN")
-st.markdown("Building-level urgency visualization based on population density")
+st.markdown("Building-level urgency visualization based on population density and live human detection")
 
-# Sidebar controls
+# Sidebar
 st.sidebar.header("Map Controls")
 mapbox_token = st.sidebar.text_input(
     "Mapbox Access Token",
     type="password",
     help="Enter your Mapbox GL JS token. Get one free at mapbox.com"
 )
-
 if not mapbox_token:
     st.sidebar.warning("⚠️ Please enter a Mapbox token to view the map")
-    st.info("📝 To use this app, you need a free Mapbox access token. Get yours at https://account.mapbox.com/")
     st.stop()
 
-refresh = st.sidebar.button("🔄 Refresh Building Data")
+refresh = st.sidebar.button("🔄 Refresh Alert Data")
+if refresh:
+    simulate_alert_updates()
+    st.rerun()
 
-# Legend
+# Urgency legend
 st.sidebar.markdown("### Urgency Levels")
-st.sidebar.markdown("🔴 **Critical** (90-100): >4000 people/sq mi")
+st.sidebar.markdown("🔴 **Critical** (90-100): High density or alerts")
 st.sidebar.markdown("🟠 **High** (70-85): 2500-4000 people/sq mi")
 st.sidebar.markdown("🟡 **Medium** (50-65): 1000-2500 people/sq mi")
 st.sidebar.markdown("🟢 **Low** (20-40): <1000 people/sq mi")
 
-# Generate building data
-buildings = generate_nashville_buildings()
+# ───────────────────────────────────────────────
+# GENERATE ALERT LOCATIONS (buildings + alerts)
+# ───────────────────────────────────────────────
+alert_locations = generate_nashville_buildings()
 
-# Convert buildings to GeoJSON
+# Get active alerts and add them to locations
+active_alerts = alert_system.get_active_alerts()
+for alert in active_alerts:
+    alert_locations.append({
+        "lat": alert['coordinates']['lat'],
+        "lon": alert['coordinates']['lon'],
+        "name": f"Alert {alert['id']}",
+        "alert_id": alert['id'],
+        "alert_type": alert['type'],
+        "alert_severity": alert['severity']
+    })
+
+# Assign urgency levels to all locations
+for location in alert_locations:
+    if 'alert_severity' in location:
+        # Use alert severity for alert locations
+        urgency, color = get_urgency(location["lat"], location["lon"], alert_severity=location['alert_severity'])
+    else:
+        # Use population density for regular buildings
+        urgency, color = get_urgency(location["lat"], location["lon"])
+    
+    location["urgency"] = urgency
+    location["color"] = color
+
+# ───────────────────────────────────────────────
+# GEOJSON CONVERSION
+# ───────────────────────────────────────────────
 geojson_data = {
     "type": "FeatureCollection",
     "features": [
         {
             "type": "Feature",
-            "geometry": {
-                "type": "Point",
-                "coordinates": [b["lon"], b["lat"]]
-            },
+            "geometry": {"type": "Point", "coordinates": [loc["lon"], loc["lat"]]},
             "properties": {
-                "name": b["name"],
-                "urgency": b["urgency"],
-                "color": b["color"]
+                "name": loc["name"], 
+                "urgency": loc["urgency"], 
+                "color": loc["color"],
+                "is_alert": "alert_id" in loc,
+                "alert_id": loc.get("alert_id", ""),
+                "alert_type": loc.get("alert_type", "")
             }
         }
-        for b in buildings
+        for loc in alert_locations
     ]
 }
 
-# Create Mapbox map
+# ───────────────────────────────────────────────
+# MAPBOX MAP
+# ───────────────────────────────────────────────
 map_html = f"""
 <!DOCTYPE html>
 <html>
@@ -123,101 +158,98 @@ map_html = f"""
     <style>
         body {{ margin: 0; padding: 0; }}
         #map {{ position: absolute; top: 0; bottom: 0; width: 100%; }}
-        .mapboxgl-popup-content {{
-            padding: 15px;
-            font-family: sans-serif;
-        }}
+        .mapboxgl-popup-content {{ padding: 15px; font-family: sans-serif; }}
     </style>
 </head>
 <body>
     <div id="map"></div>
     <script>
         mapboxgl.accessToken = '{mapbox_token}';
-        
         const map = new mapboxgl.Map({{
             container: 'map',
             style: 'mapbox://styles/mapbox/dark-v11',
             center: [-86.7816, 36.1627],
             zoom: 12
         }});
-        
         const geojsonData = {json.dumps(geojson_data)};
-        
         map.on('load', () => {{
-            map.addSource('buildings', {{
-                type: 'geojson',
-                data: geojsonData
-            }});
-            
+            map.addSource('buildings', {{ type: 'geojson', data: geojsonData }});
             map.addLayer({{
                 id: 'building-circles',
                 type: 'circle',
                 source: 'buildings',
                 paint: {{
-                    'circle-radius': [
-                        'interpolate',
-                        ['linear'],
-                        ['zoom'],
-                        10, 6,
-                        15, 12
-                    ],
+                    'circle-radius': ['interpolate',['linear'],['zoom'],10,6,15,12],
                     'circle-color': ['get', 'color'],
                     'circle-opacity': 0.8,
                     'circle-stroke-width': 2,
                     'circle-stroke-color': '#ffffff'
                 }}
             }});
-            
-            // Add click popup
             map.on('click', 'building-circles', (e) => {{
-                const coordinates = e.features[0].geometry.coordinates.slice();
-                const props = e.features[0].properties;
-                
-                const html = `
-                    <strong>${{props.name}}</strong><br>
-                    <span style="color: ${{props.color}}; font-weight: bold;">
-                        Urgency: ${{props.urgency}}
-                    </span>
-                `;
-                
-                new mapboxgl.Popup()
-                    .setLngLat(coordinates)
-                    .setHTML(html)
-                    .addTo(map);
-            }});
-            
-            map.on('mouseenter', 'building-circles', () => {{
-                map.getCanvas().style.cursor = 'pointer';
-            }});
-            
-            map.on('mouseleave', 'building-circles', () => {{
-                map.getCanvas().style.cursor = '';
+                const c = e.features[0].geometry.coordinates.slice();
+                const p = e.features[0].properties;
+                let html = `<strong>${{p.name}}</strong><br><span style="color:${{p.color}};font-weight:bold;">Urgency: ${{p.urgency}}</span>`;
+                if (p.is_alert) {{
+                    html += `<br><span style="color:#d32f2f;font-weight:bold;">ALERT: ${{p.alert_type}}</span>`;
+                }}
+                new mapboxgl.Popup().setLngLat(c).setHTML(html).addTo(map);
             }});
         }});
     </script>
 </body>
 </html>
 """
-
-# Display map
 components.html(map_html, height=600)
 
-# Display statistics
+# ───────────────────────────────────────────────
+# ALERT STATUS
+# ───────────────────────────────────────────────
+st.markdown("### 🚨 Alert Status")
+alert_summary = alert_system.get_alert_summary()
+col1, col2, col3 = st.columns(3)
+col1.metric("🟣 Active 100-Level Alerts", alert_summary['active_alerts'])
+col2.metric("📊 Total Alerts Today", alert_summary['total_alerts'])
+if alert_summary['drone_coordinates']:
+    col3.metric("📍 Drone Location", f"{alert_summary['drone_coordinates']['lat']:.4f}, {alert_summary['drone_coordinates']['lon']:.4f}")
+
+# Display active alerts
+if active_alerts:
+    st.markdown("#### Active Alerts:")
+    for alert in active_alerts:
+        with st.expander(f"🚨 Alert {alert['id']} - {alert['timestamp']}"):
+            st.write(f"**Type:** {alert['type']}")
+            st.write(f"**Severity:** {alert['severity']}")
+            st.write(f"**Location:** {alert['coordinates']['lat']:.4f}, {alert['coordinates']['lon']:.4f}")
+            st.write(f"**Conditions:** {', '.join(alert['conditions'])}")
+            if st.button(f"Resolve Alert {alert['id']}", key=f"resolve_{alert['id']}"):
+                alert_system.resolve_alert(alert['id'])
+                st.rerun()
+
+# ───────────────────────────────────────────────
+# STATISTICS
+# ───────────────────────────────────────────────
 st.markdown("### Current Statistics")
 col1, col2, col3, col4 = st.columns(4)
-
-critical = len([b for b in buildings if b["urgency"] >= 90])
-high = len([b for b in buildings if 70 <= b["urgency"] < 90])
-medium = len([b for b in buildings if 50 <= b["urgency"] < 70])
-low = len([b for b in buildings if b["urgency"] < 50])
-
+critical = len([loc for loc in alert_locations if loc["urgency"] >= 90])
+high = len([loc for loc in alert_locations if 70 <= loc["urgency"] < 90])
+medium = len([loc for loc in alert_locations if 50 <= loc["urgency"] < 70])
+low = len([loc for loc in alert_locations if loc["urgency"] < 50])
 col1.metric("🔴 Critical", critical)
 col2.metric("🟠 High", high)
 col3.metric("🟡 Medium", medium)
 col4.metric("🟢 Low", low)
 
-# Show top urgency buildings
+# ───────────────────────────────────────────────
+# TOP URGENCY LOCATIONS
+# ───────────────────────────────────────────────
 st.markdown("### Top 10 Highest Urgency Locations")
-sorted_buildings = sorted(buildings, key=lambda x: x["urgency"], reverse=True)[:10]
-for i, b in enumerate(sorted_buildings, 1):
-    st.markdown(f"{i}. **{b['name']}** - Urgency: {b['urgency']} (Lat: {b['lat']:.4f}, Lon: {b['lon']:.4f})")
+sorted_locations = sorted(alert_locations, key=lambda x: x["urgency"], reverse=True)[:10]
+for i, loc in enumerate(sorted_locations, 1):
+    alert_indicator = " 🚨" if "alert_id" in loc else ""
+    st.markdown(f"{i}. **{loc['name']}**{alert_indicator} - Urgency: {loc['urgency']} (Lat: {loc['lat']:.4f}, Lon: {loc['lon']:.4f})")
+
+# ───────────────────────────────────────────────
+# MANUAL REFRESH ONLY
+# ───────────────────────────────────────────────
+# Alert updates are handled manually via the refresh button
