@@ -27,13 +27,10 @@ Install dependencies:
 ```
 pip install -r requirements.txt
 ```
-> Ensure `requirements.txt` lists all needed packages like `boto3` or `python-dotenv`.
 
 ## Running the App
 
-```python main.py```
-
-> Replace `main.py` with your app’s entry point if different.
+```python app.py```
 
 ## Pulling Updates
 
