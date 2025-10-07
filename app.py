@@ -4,6 +4,7 @@ import json, random, time
 from density import load_population_density, high_density_coordinates
 from utils import generate_nashville_buildings
 from alert_system import alert_system, trigger_100_level_alert
+from human_detection import detect_humans_once_and_update
 
 # ───────────────────────────────────────────────
 # STREAMLIT PAGE CONFIG
@@ -52,18 +53,10 @@ def get_urgency(lat, lon, population_density=None, alert_severity=None):
 # ALERT SIMULATION
 # ───────────────────────────────────────────────
 def simulate_alert_updates():
-    """Simulate alert updates for demonstration purposes"""
-    # Update drone coordinates
-    alert_system.update_drone_coordinates(36.1627, -86.7816, altitude=100)
-    
-    # Simulate random alert generation
-    if random.random() < 0.5:  # 50% chance per refresh
-        alert = trigger_100_level_alert(
-            human_detected=random.choice([True, False]),
-            population_density=random.uniform(3000, 5000)
-        )
-        if alert:
-            st.toast(f"🚨 New Alert: {', '.join(alert['conditions'])}", icon="🚨")
+    """Run real detection once and update coordinates/alerts accordingly."""
+    detected = detect_humans_once_and_update()
+    if detected:
+        st.toast("🚨 New Alert: Human detected", icon="🚨")
 
 # ───────────────────────────────────────────────
 # STREAMLIT UI
@@ -89,6 +82,7 @@ if refresh:
 
 # Urgency legend
 st.sidebar.markdown("### Urgency Levels")
+st.sidebar.markdown("🟣 **Survivor detected**: Human detected")
 st.sidebar.markdown("🔴 **Critical** (90-100): High density or alerts")
 st.sidebar.markdown("🟠 **High** (70-85): 2500-4000 people/sq mi")
 st.sidebar.markdown("🟡 **Medium** (50-65): 1000-2500 people/sq mi")
@@ -103,24 +97,29 @@ alert_locations = generate_nashville_buildings()
 # Get active alerts and add them to locations
 active_alerts = alert_system.get_active_alerts()
 for alert in active_alerts:
+    survivor = any("Human detected" in cond for cond in alert.get('conditions', []))
     alert_locations.append({
         "lat": alert['coordinates']['lat'],
         "lon": alert['coordinates']['lon'],
         "name": f"Alert {alert['id']}",
         "alert_id": alert['id'],
         "alert_type": alert['type'],
-        "alert_severity": alert['severity']
+        "alert_severity": alert['severity'],
+        "survivor": survivor
     })
 
 # Assign urgency levels to all locations
 for location in alert_locations:
     if 'alert_severity' in location:
-        # Use alert severity for alert locations
         urgency, color = get_urgency(location["lat"], location["lon"], alert_severity=location['alert_severity'])
     else:
-        # Use population density for regular buildings
         urgency, color = get_urgency(location["lat"], location["lon"])
-    
+
+    # Survivor detected: force purple color and urgency 100
+    if location.get('survivor'):
+        urgency = 100
+        color = "#9c27b0"
+
     location["urgency"] = urgency
     location["color"] = color
 
@@ -139,7 +138,8 @@ geojson_data = {
                 "color": loc["color"],
                 "is_alert": "alert_id" in loc,
                 "alert_id": loc.get("alert_id", ""),
-                "alert_type": loc.get("alert_type", "")
+                "alert_type": loc.get("alert_type", ""),
+                "survivor": loc.get("survivor", False)
             }
         }
         for loc in alert_locations
@@ -193,8 +193,8 @@ map_html = f"""
                 const p = e.features[0].properties;
                 let html = `<strong>${{p.name}}</strong><br><span style="color:${{p.color}};font-weight:bold;">Urgency: ${{p.urgency}}</span>`;
                 if (p.is_alert) {{
-                    if (p.urgency >= 100) {{
-                        html += `<br><span style="color:#9c27b0;font-weight:bold;">🟣 SURVIVOR DETECTED</span>`;
+                    if (p.survivor) {{
+                        html += `<br><span style="color:#9c27b0;font-weight:bold;">Survivor detected</span>`;
                     }} else {{
                         html += `<br><span style="color:#d32f2f;font-weight:bold;">ALERT: ${{p.alert_type}}</span>`;
                     }}
