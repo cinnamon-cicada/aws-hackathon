@@ -27,11 +27,14 @@ Install dependencies:
 ```
 pip install -r requirements.txt
 ```
-
 ## Running the App
 
 1. Run `streamlit run app.py`
 2. Insert Mapbox API key (get an account here: https://console.mapbox.com/)
+
+## Running the App
+
+```python app.py```
 
 ## Pulling Updates
 
