@@ -30,7 +30,8 @@ pip install -r requirements.txt
 
 ## Running the App
 
-```python app.py```
+1. Run `python app.py`
+2. Insert Mapbox API key (get an account here: https://console.mapbox.com/)
 
 ## Pulling Updates
 
