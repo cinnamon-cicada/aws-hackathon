@@ -24,28 +24,29 @@ def get_urgency(lat, lon, population_density=None, alert_severity=None):
     if alert_severity is not None:
         urgency = alert_severity
         if urgency >= 100:
-            color = "#d32f2f"  # Red for 100-level alerts
+            color = "#9c27b0"  # 🟣 Purple for human-detected alerts
         elif urgency >= 90:
-            color = "#d32f2f"  # Red
+            color = "#d32f2f"  # 🔴 Red
         elif urgency >= 70:
-            color = "#f57c00"  # Orange
+            color = "#f57c00"  # 🟠 Orange
         elif urgency >= 50:
-            color = "#fbc02d"  # Yellow
+            color = "#fbc02d"  # 🟡 Yellow
         else:
-            color = "#388e3c"  # Green
+            color = "#388e3c"  # 🟢 Green
     elif population_density > 4000:
         urgency = 90 + random.uniform(0, 10)
-        color = "#d32f2f"  # Red
+        color = "#d32f2f"
     elif population_density > 2500:
         urgency = 70 + random.uniform(0, 15)
-        color = "#f57c00"  # Orange
+        color = "#f57c00"
     elif population_density > 1000:
         urgency = 50 + random.uniform(0, 15)
-        color = "#fbc02d"  # Yellow
+        color = "#fbc02d"
     else:
         urgency = 20 + random.uniform(0, 20)
-        color = "#388e3c"  # Green
+        color = "#388e3c"
     return round(urgency, 1), color
+
 
 # ───────────────────────────────────────────────
 # ALERT SIMULATION
@@ -56,7 +57,7 @@ def simulate_alert_updates():
     alert_system.update_drone_coordinates(36.1627, -86.7816, altitude=100)
     
     # Simulate random alert generation
-    if random.random() < 0.1:  # 10% chance per refresh
+    if random.random() < 0.5:  # 50% chance per refresh
         alert = trigger_100_level_alert(
             human_detected=random.choice([True, False]),
             population_density=random.uniform(3000, 5000)
@@ -92,6 +93,7 @@ st.sidebar.markdown("🔴 **Critical** (90-100): High density or alerts")
 st.sidebar.markdown("🟠 **High** (70-85): 2500-4000 people/sq mi")
 st.sidebar.markdown("🟡 **Medium** (50-65): 1000-2500 people/sq mi")
 st.sidebar.markdown("🟢 **Low** (20-40): <1000 people/sq mi")
+st.sidebar.markdown("🟣 **Survivor:** Potential survivor detected.")
 
 # ───────────────────────────────────────────────
 # GENERATE ALERT LOCATIONS (buildings + alerts)
@@ -191,7 +193,11 @@ map_html = f"""
                 const p = e.features[0].properties;
                 let html = `<strong>${{p.name}}</strong><br><span style="color:${{p.color}};font-weight:bold;">Urgency: ${{p.urgency}}</span>`;
                 if (p.is_alert) {{
-                    html += `<br><span style="color:#d32f2f;font-weight:bold;">ALERT: ${{p.alert_type}}</span>`;
+                    if (p.urgency >= 100) {{
+                        html += `<br><span style="color:#9c27b0;font-weight:bold;">🟣 SURVIVOR DETECTED</span>`;
+                    }} else {{
+                        html += `<br><span style="color:#d32f2f;font-weight:bold;">ALERT: ${{p.alert_type}}</span>`;
+                    }}
                 }}
                 new mapboxgl.Popup().setLngLat(c).setHTML(html).addTo(map);
             }});
