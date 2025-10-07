@@ -9,25 +9,29 @@ Clone the repository:
 git clone https://github.com/cinnamon-cicada/aws-hackathon.git
 cd aws-hackathon
 
-Switch to the `eileen` branch (if needed):
+Switch to the `INSERT_NAME` branch (if needed):
 
-git checkout eileen
+```
+git checkout INSERT_NAME
+```
 
 Set up Python environment:
 
+```
 python -m venv venv
 source venv/bin/activate   # Linux/macOS
 venv\Scripts\activate      # Windows
-
+```
 Install dependencies:
 
+```
 pip install -r requirements.txt
-
+```
 > Ensure `requirements.txt` lists all needed packages like `boto3` or `python-dotenv`.
 
 ## Running the App
 
-python main.py
+```python main.py```
 
 > Replace `main.py` with your app’s entry point if different.
 
@@ -35,13 +39,16 @@ python main.py
 
 Pull latest changes from your branch:
 
-git checkout eileen
-git pull origin eileen
-
+```
+git checkout INSERT_NAME
+git pull origin INSERT_NAME
+```
 Pull latest changes from main branch if needed:
 
+```
 git checkout main
 git pull origin main
+```
 
 ## Contributing
 
