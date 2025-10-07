@@ -27,7 +27,6 @@ Install dependencies:
 ```
 pip install -r requirements.txt
 ```
-
 ## Running the App
 
 1. Run `streamlit run app.py`
