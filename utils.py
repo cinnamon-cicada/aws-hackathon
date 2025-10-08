@@ -4,9 +4,8 @@ import numpy as np
 import cv2
 from PIL import Image
 import os
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-from scipy.ndimage import gaussian_filter
+import json
+from datetime import datetime
 
 def generate_nashville_buildings():
     """Generate sample building locations across Nashville"""
@@ -28,33 +27,27 @@ def generate_nashville_buildings():
     
     return buildings
 
-def makePng(heatmap_points, input_image_path, output_path="heatmap_output.png"):
+def makeJSON(heatmap_points, input_image_path, output_path="detections_output.json"):
     """
-    Create a PNG heatmap using matplotlib with the same dimensions as the input image.
+    Create a JSON file with detection data in the specified format.
     
     Args:
         heatmap_points: List of detection points with lat, lon, weight
-        input_image_path: Path to the input image to match dimensions
-        output_path: Path to save the output PNG
+        input_image_path: Path to the input image to get dimensions
+        output_path: Path to save the output JSON
     
     Returns:
-        Path to the generated PNG file
+        Path to the generated JSON file
     """
     try:
         # Load input image to get dimensions
         input_img = cv2.imread(input_image_path)
         if input_img is None:
-            print(f"[MAKEPNG] Error: Could not load input image {input_image_path}")
+            print(f"[MAKEJSON] Error: Could not load input image {input_image_path}")
             return None
             
         height, width = input_img.shape[:2]
-        print(f"[MAKEPNG] Input image dimensions: {width}x{height}")
-        
-        if not heatmap_points:
-            print("[MAKEPNG] No heatmap points provided")
-            # Save empty canvas
-            cv2.imwrite(output_path, np.zeros((height, width, 3), dtype=np.uint8))
-            return output_path
+        print(f"[MAKEJSON] Input image dimensions: {width}x{height}")
         
         # Use input image bounds (same as in detection function)
         center_lat = 36.1627  # Nashville center
@@ -67,10 +60,8 @@ def makePng(heatmap_points, input_image_path, output_path="heatmap_output.png"):
             'west': center_lon - 0.01
         }
         
-        # Create heatmap data
-        heatmap_data = np.zeros((height, width))
-        
-        # Add each point to the heatmap with Gaussian distribution
+        # Convert heatmap points to detection format
+        detections = []
         for i, point in enumerate(heatmap_points):
             lat, lon, weight = point['lat'], point['lon'], point['weight']
             
@@ -82,44 +73,32 @@ def makePng(heatmap_points, input_image_path, output_path="heatmap_output.png"):
             pixel_x = max(0, min(width-1, pixel_x))
             pixel_y = max(0, min(height-1, pixel_y))
             
-            # Add heat with small radius (1/4 original size)
-            radius = max(1, int(weight * 5))
-            cv2.circle(heatmap_data, (pixel_x, pixel_y), radius, weight, -1)
+            detections.append({
+                "id": i + 1,
+                "x": pixel_x,
+                "y": pixel_y,
+                "confidence": round(weight, 2)
+            })
         
-        # Apply Gaussian blur for smooth gradients
-        heatmap_data = gaussian_filter(heatmap_data, sigma=3)
+        # Create JSON structure
+        json_data = {
+            "detections": detections,
+            "metadata": {
+                "image_width": width,
+                "image_height": height,
+                "timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            }
+        }
         
-        # Normalize to 0-1 range
-        if heatmap_data.max() > 0:
-            heatmap_data = heatmap_data / heatmap_data.max()
+        # Save JSON file
+        with open(output_path, 'w') as f:
+            json.dump(json_data, f, indent=2)
         
-        # Create rainbow colormap
-        colors = ['purple', 'blue', 'green', 'yellow', 'orange', 'red']
-        n_bins = 256
-        cmap = mcolors.LinearSegmentedColormap.from_list('rainbow', colors, N=n_bins)
-        
-        # Create matplotlib figure
-        fig, ax = plt.subplots(figsize=(width/100, height/100), dpi=100)
-        
-        # Plot heatmap using image coordinates (0 to width, 0 to height)
-        im = ax.imshow(heatmap_data, extent=[0, width, 0, height], 
-                      cmap=cmap, origin='lower', alpha=0.8)
-        
-        # Remove axes and margins
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.axis('off')
-        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
-        
-        # Save as PNG
-        plt.savefig(output_path, bbox_inches='tight', pad_inches=0, dpi=100)
-        plt.close()
-        
-        print(f"[MAKEPNG] Heatmap saved to: {output_path}")
-        print(f"[MAKEPNG] Processed {len(heatmap_points)} detection points")
+        print(f"[MAKEJSON] Detection data saved to: {output_path}")
+        print(f"[MAKEJSON] Processed {len(heatmap_points)} detection points")
         
         return output_path
         
     except Exception as e:
-        print(f"[MAKEPNG] Error creating heatmap: {e}")
+        print(f"[MAKEJSON] Error creating JSON: {e}")
         return None

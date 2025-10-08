@@ -14,7 +14,7 @@ from typing import Dict, List, Tuple, Any, Optional
 from dotenv import load_dotenv
 from alert_system import alert_system, trigger_100_level_alert
 from drone_simulator import DroneSimulator
-from utils import makePng
+from utils import makeJSON
 
 load_dotenv('aws_credentials.env')
 
@@ -274,10 +274,10 @@ def detect_human_heatmap_points() -> List[Dict[str, float]]:
         if points:
             try:
                 input_image_path = 'assets/test1.png'
-                output_path = f'assets/heatmap_{int(time.time())}.png'
-                png_path = makePng(points, input_image_path, output_path)
-                if png_path:
-                    print(f"[HEATMAP] PNG heatmap generated: {png_path}")
+                output_path = f'assets/heatmap_data_{int(time.time())}.json'
+                json_path = makeJSON(points, input_image_path, output_path)
+                if json_path:
+                    print(f"[HEATMAP] PNG heatmap generated: {json_path}")
                 else:
                     print("[HEATMAP] Failed to generate PNG heatmap")
             except Exception as e:
