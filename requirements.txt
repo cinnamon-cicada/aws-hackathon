@@ -2,3 +2,7 @@ streamlit
 numpy
 opencv-python
 asyncio
+boto3
+Pillow
+python-dotenv
+boto3

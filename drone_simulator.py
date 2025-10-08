@@ -11,13 +11,16 @@ class DroneSimulator:
         self.lon = start_lon
         self.alt = altitude
         self.video_path = video_path
+        print(f"[DRONE_SIM] Initializing with video path: {video_path}")
         self.cap = cv2.VideoCapture(self.video_path)
         if not self.cap.isOpened():
+            print(f"[DRONE_SIM] WARNING: Could not open video file {video_path}")
             self.cap = None
             self.frame_count = 0
         else:
             count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
             self.frame_count = count if count > 0 else 0
+            print(f"[DRONE_SIM] Video loaded successfully - {self.frame_count} frames available")
 
     def get_coordinates(self):
         self.lat += random.uniform(-0.0005, 0.0005)
@@ -27,12 +30,16 @@ class DroneSimulator:
 
     def get_random_frame(self):
         if self.cap is None or self.frame_count <= 0:
+            print(f"[DRONE_SIM] Using random noise frame (no video available)")
             return np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
         idx = random.randint(0, self.frame_count - 1)
+        print(f"[DRONE_SIM] Seeking to frame {idx} of {self.frame_count}")
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
         ok, frame = self.cap.read()
         if not ok or frame is None:
+            print(f"[DRONE_SIM] Failed to read frame {idx}, using random noise")
             return np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
+        print(f"[DRONE_SIM] Successfully read frame {idx} with shape {frame.shape}")
         return frame
 
     def close(self):
