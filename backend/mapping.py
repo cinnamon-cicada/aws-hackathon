@@ -478,7 +478,7 @@ def process_image_pair(
     cloud_thresh: int = 230,
     normalize: bool = True,
     preset: str = 'default'
-) -> Dict[str, Any]:
+) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """
     Main processing function: analyze before/after image pair and generate damage map.
     
@@ -494,7 +494,7 @@ def process_image_pair(
         preset: Damage analysis preset, e.g. 'earthquake', 'typhoon' (default: 'default')
         
     Returns:
-        GeoJSON FeatureCollection dict
+        Tuple of (GeoJSON FeatureCollection dict, List of patch results)
     """
     logger.info("=" * 60)
     logger.info("Starting image pair processing")
@@ -595,7 +595,7 @@ def process_image_pair(
         scores = [f['properties']['damage_score'] for f in non_cloud]
         logger.info(f"Damage scores - min: {min(scores):.3f}, max: {max(scores):.3f}, mean: {np.mean(scores):.3f}")
     
-    return geojson
+    return geojson, results
 
 
 def visualize_geojson_on_map(
@@ -901,7 +901,7 @@ Examples:
     
     # Process images
     try:
-        geojson_data = process_image_pair(
+        geojson_data, results = process_image_pair(
             before_path=args.before,
             after_path=args.after,
             output_geojson_path=args.out,
