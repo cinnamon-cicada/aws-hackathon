@@ -6,3 +6,13 @@ boto3
 Pillow
 python-dotenv
 boto3
+scikit-image
+geopandas
+folium
+requests
+pandas
+matplotlib
+seaborn
+shapely
+plotly
+plotly-express

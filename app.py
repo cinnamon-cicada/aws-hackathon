@@ -4,7 +4,7 @@ import json, random, time
 from density import load_population_density, high_density_coordinates
 from utils import generate_nashville_buildings
 from alert_system import alert_system, trigger_100_level_alert
-from human_detection import detect_humans_once_and_update
+from human_detection import detect_human_heatmap_points
 
 # ───────────────────────────────────────────────
 # STREAMLIT PAGE CONFIG
@@ -54,9 +54,24 @@ def get_urgency(lat, lon, population_density=None, alert_severity=None):
 # ───────────────────────────────────────────────
 def simulate_alert_updates():
     """Run real detection once and update coordinates/alerts accordingly."""
-    detected = detect_humans_once_and_update()
-    if detected:
-        st.toast("🚨 New Alert: Human detected", icon="🚨")
+    # Collect all detection points for heatmap (non-blocking if fails)
+    try:
+        points = detect_human_heatmap_points()
+        if points:
+            st.toast("🚨 New Alert: Human detected", icon="🚨")
+            heat_key = 'human_heat_points'
+            if heat_key not in st.session_state:
+                st.session_state[heat_key] = []
+            # Add all points at once
+            st.session_state[heat_key].extend(points)
+            # Cap list to avoid unbounded growth
+            if len(st.session_state[heat_key]) > 500:
+                st.session_state[heat_key] = st.session_state[heat_key][-500:]
+            st.sidebar.info(f"Human heat points: {len(st.session_state[heat_key])} (added {len(points)})")
+        else:
+            st.sidebar.info(f"Human heat points: {len(st.session_state.get('human_heat_points', []))}")
+    except Exception:
+        st.sidebar.info(f"Human heat points: {len(st.session_state.get('human_heat_points', []))}")
 
 # ───────────────────────────────────────────────
 # STREAMLIT UI
@@ -174,8 +189,55 @@ map_html = f"""
             zoom: 12
         }});
         const geojsonData = {json.dumps(geojson_data)};
+        const humanHeatPoints = {json.dumps([
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [p["lon"], p["lat"]]},
+                "properties": {"weight": p["weight"]}
+            } for p in st.session_state.get('human_heat_points', [])
+        ])};
+        const humanHeatData = {{"type": "FeatureCollection", "features": humanHeatPoints}};
         map.on('load', () => {{
             map.addSource('buildings', {{ type: 'geojson', data: geojsonData }});
+            // Human detection heatmap source
+            map.addSource('human-heat', {{ type: 'geojson', data: humanHeatData }});
+            // Heatmap layer under points
+            map.addLayer({{
+                id: 'human-detection-heatmap',
+                type: 'heatmap',
+                source: 'human-heat',
+                maxzoom: 16,
+                paint: {{
+                    'heatmap-weight': ['coalesce', ['get', 'weight'], 0.4],
+                    'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 10, 2.0, 15, 5.0],
+                    'heatmap-color': [
+                        'interpolate', ['linear'], ['heatmap-density'],
+                        0.0, 'rgba(156,39,176,0.0)',
+                        0.1, 'rgba(156,39,176,0.4)',
+                        0.2, 'rgba(156,39,176,0.6)',
+                        0.4, 'rgba(211,47,47,0.7)',
+                        0.6, 'rgba(245,124,0,0.8)',
+                        0.8, 'rgba(251,192,45,0.9)',
+                        1.0, 'rgba(255,255,255,1.0)'
+                    ],
+                    'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 10, 20, 15, 40],
+                    'heatmap-opacity': 1.0
+                }}
+            }});
+            
+            // Add purple circles for individual human detections
+            map.addLayer({{
+                id: 'human-detection-points',
+                type: 'circle',
+                source: 'human-heat',
+                paint: {{
+                    'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 4, 15, 8],
+                    'circle-color': '#9c27b0',
+                    'circle-opacity': 0.8,
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#ffffff'
+                }}
+            }});
             map.addLayer({{
                 id: 'building-circles',
                 type: 'circle',
@@ -188,6 +250,25 @@ map_html = f"""
                     'circle-stroke-color': '#ffffff'
                 }}
             }});
+            // Click handler for human detection points
+            map.on('click', 'human-detection-points', (e) => {{
+                const c = e.features[0].geometry.coordinates.slice();
+                const p = e.features[0].properties;
+                const html = `
+                    <div style="font-family: Arial; width: 200px;">
+                        <h4 style="color: #9c27b0; margin: 5px 0;">🟣 Human Detected</h4>
+                        <div style="padding: 5px; background: #f0f0f0; border-radius: 3px;">
+                            <b>Confidence: ${{(p.weight * 100).toFixed(1)}}%</b>
+                        </div>
+                        <hr style="margin: 8px 0;">
+                        <div style="font-size: 12px; color: #666;">
+                            Location: ${{c[1].toFixed(4)}}, ${{c[0].toFixed(4)}}
+                        </div>
+                    </div>
+                `;
+                new mapboxgl.Popup().setLngLat(c).setHTML(html).addTo(map);
+            }});
+            
             map.on('click', 'building-circles', (e) => {{
                 const c = e.features[0].geometry.coordinates.slice();
                 const p = e.features[0].properties;

@@ -42,6 +42,15 @@ class DroneSimulator:
         print(f"[DRONE_SIM] Successfully read frame {idx} with shape {frame.shape}")
         return frame
 
+    def get_img_frame(self, path):
+        """Load an image from file path and return as numpy array (same type as get_random_frame)"""
+        frame = cv2.imread(path)
+        if frame is None:
+            print(f"[DRONE_SIM] Failed to load image: {path}, using random noise")
+            return np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
+        print(f"[DRONE_SIM] Successfully loaded image: {path} with shape {frame.shape}")
+        return frame
+
     def close(self):
         if self.cap is not None:
             try:

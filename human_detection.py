@@ -6,6 +6,7 @@ import random
 import base64
 import io
 import os
+import time
 from PIL import Image
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
@@ -13,6 +14,7 @@ from typing import Dict, List, Tuple, Any, Optional
 from dotenv import load_dotenv
 from alert_system import alert_system, trigger_100_level_alert
 from drone_simulator import DroneSimulator
+from utils import makePng
 
 load_dotenv('aws_credentials.env')
 
@@ -66,7 +68,7 @@ class AWSRekognitionDetector:
             print(f"[AWS_REKOGNITION] Error converting frame to bytes: {e}")
             return None
     
-    def detect_humans(self, frame: np.ndarray, min_confidence: float = 80.0) -> Tuple[bool, List[Dict], float]:
+    def detect_humans(self, frame: np.ndarray, min_confidence: float = 70.0) -> Tuple[bool, List[Dict], float]:
         """
         Detect humans in frame using AWS Rekognition
         Returns: (detected: bool, detections: list, max_confidence: float)
@@ -129,7 +131,7 @@ class AWSRekognitionDetector:
 
 # AWS Rekognition Human Detection Model
 class AWSHumanDetectionModel:
-    def __init__(self, region_name: str = 'us-east-1', min_confidence: float = 80.0):
+    def __init__(self, region_name: str = 'us-east-1', min_confidence: float = 70.0):
         """Initialize AWS Rekognition-based human detection model"""
         self.detector = AWSRekognitionDetector(region_name)
         self.min_confidence = min_confidence
@@ -156,21 +158,7 @@ class AWSHumanDetectionModel:
         return detected, detections, confidence_scale
     
 # Global model instance - using AWS Rekognition
-model = AWSHumanDetectionModel(min_confidence=80.0)
-
-def test_aws_rekognition():
-    """Test AWS Rekognition with a simple frame"""
-    print("[TEST] Testing AWS Rekognition...")
-    
-    # Create a simple test frame
-    test_frame = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
-    
-    # Test detection
-    detected, detections, confidence = model.detect_humans(test_frame)
-    
-    print(f"[TEST] Result: detected={detected}, confidence={confidence:.3f}, detections={len(detections)}")
-    
-    return detected, detections, confidence
+model = AWSHumanDetectionModel(min_confidence=70.0)
 
 # Persistent simulator instance for single-step detection calls
 _sim = DroneSimulator()
@@ -185,10 +173,10 @@ async def monitor_drone_feed():
     
     while True:
         try:
-            frame = sim.get_random_frame()
+            frame = sim.get_img_frame('assets/test1.png')
             lat, lon, alt = sim.get_coordinates()
             alert_system.update_drone_coordinates(lat, lon, altitude=alt)
-            frame = sim.get_random_frame()
+            frame = sim.get_img_frame('assets/test1.png')
             lat, lon, alt = sim.get_coordinates()
             alert_system.update_drone_coordinates(lat, lon, altitude=alt)
             
@@ -221,20 +209,84 @@ async def monitor_drone_feed():
     except Exception:
         pass
 
-
-def detect_humans_once_and_update() -> bool:
-    """Grab a frame from the simulator, update coordinates, and run detection once.
-    Returns True if a human is detected (and triggers an alert), else False.
+def detect_human_heatmap_points() -> List[Dict[str, float]]:
+    """Run one detection step and return all detection points for heatmap.
+    Returns a list of dicts: [{ 'lat': float, 'lon': float, 'weight': float }] where weight in [0,1].
+    Returns empty list if no detections or error.
     """
-    frame = _sim.get_random_frame()
-    lat, lon, alt = _sim.get_coordinates()
-    alert_system.update_drone_coordinates(lat, lon, altitude=alt)
-    humans_detected, boxes, confidence = model.detect_humans(frame)
-    print(f"[SINGLE_DETECTION] Result: {humans_detected}, Confidence: {confidence:.4f}, Boxes: {len(boxes)}")
-    if humans_detected:
-        population_density = random.uniform(3000, 5000)
-        trigger_100_level_alert(human_detected=True, population_density=population_density)
-    return humans_detected
+    try:
+        frame = _sim.get_img_frame('assets/test1.png')
+        lat, lon, alt = _sim.get_coordinates()
+        # Do not update alert system here; this is a passive collection call
+        humans_detected, boxes, confidence = model.detect_humans(frame)
+        
+        points = []
+        if humans_detected and len(boxes) > 0:
+            # Get image dimensions for relative positioning
+            img_height, img_width = frame.shape[:2]
+            
+            # Define the area covered by the drone image (adjust these coordinates as needed)
+            # This represents the geographic area that the image covers
+            image_bounds = {
+                'north': lat + 0.01,  # North boundary
+                'south': lat - 0.01,  # South boundary  
+                'east': lon + 0.01,   # East boundary
+                'west': lon - 0.01    # West boundary
+            }
+            
+            # Create a point for each detection box
+            for i, box in enumerate(boxes):
+                # Get bounding box coordinates from AWS Rekognition
+                bbox = box.get('bounding_box', {})
+                if bbox:
+                    # AWS Rekognition returns normalized coordinates (0-1)
+                    left = bbox.get('Left', 0.5)
+                    top = bbox.get('Top', 0.5)
+                    width = bbox.get('Width', 0.1)
+                    height = bbox.get('Height', 0.1)
+                    
+                    # Calculate center of bounding box
+                    center_x = left + width / 2
+                    center_y = top + height / 2
+                    
+                    # Convert image coordinates to geographic coordinates
+                    # X coordinate (left-right) maps to longitude
+                    geo_lon = image_bounds['west'] + center_x * (image_bounds['east'] - image_bounds['west'])
+                    # Y coordinate (top-bottom) maps to latitude (inverted)
+                    geo_lat = image_bounds['north'] - center_y * (image_bounds['north'] - image_bounds['south'])
+                else:
+                    # Fallback to center of image with small offset
+                    offset_lat = random.uniform(-0.0005, 0.0005)
+                    offset_lon = random.uniform(-0.0005, 0.0005)
+                    geo_lat = lat + offset_lat
+                    geo_lon = lon + offset_lon
+                
+                # Use detection confidence as weight, with minimum for visibility
+                weight = max(float(box.get('confidence', confidence)) / 100.0, 0.35)
+                
+                points.append({
+                    'lat': float(geo_lat),
+                    'lon': float(geo_lon),
+                    'weight': weight
+                })
+        
+        # Generate PNG heatmap if we have points
+        if points:
+            try:
+                input_image_path = 'assets/test1.png'
+                output_path = f'assets/heatmap_{int(time.time())}.png'
+                png_path = makePng(points, input_image_path, output_path)
+                if png_path:
+                    print(f"[HEATMAP] PNG heatmap generated: {png_path}")
+                else:
+                    print("[HEATMAP] Failed to generate PNG heatmap")
+            except Exception as e:
+                print(f"[HEATMAP] Error generating PNG: {e}")
+        
+        return points
+    except Exception as e:
+        print(f"[HEATMAP] Error generating heatmap points: {e}")
+        return []
 
 async def send_alert(alert_data):
     """
