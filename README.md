@@ -26,6 +26,8 @@ Install dependencies:
 
 ```
 pip install -r requirements.txt
+sudo yum install -y mesa-libGLU     # On AWS workspace
+sudo yum install -y mesa-libGLU     # On AWS workspace
 ```
 ## Running the App
 
