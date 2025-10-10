@@ -1,9 +1,9 @@
 import streamlit as st
 import streamlit.components.v1 as components
-import json, random, time
-from density import load_population_density, high_density_coordinates
-from utils import generate_nashville_buildings
+import json, random, time, base64
+from utils import get_center_coordinates, generate_heatmap_dots
 from alert_system import alert_system, trigger_100_level_alert
+from human_detection import detect_human_heatmap_points
 
 # ───────────────────────────────────────────────
 # STREAMLIT PAGE CONFIG
@@ -13,14 +13,8 @@ st.set_page_config(page_title="EMS Urgency Map - Nashville", layout="wide")
 # ───────────────────────────────────────────────
 # URGENCY FUNCTION
 # ───────────────────────────────────────────────
-def get_urgency(lat, lon, population_density=None, alert_severity=None):
-    """Calculate urgency level based on population density and alert severity."""
-    if population_density is None:
-        downtown_lat, downtown_lon = 36.1627, -86.7816
-        distance = ((lat - downtown_lat)**2 + (lon - downtown_lon)**2)**0.5
-        population_density = max(0, 5000 - (distance * 10000)) + random.uniform(-500, 500)
-
-    # Use alert severity if available, otherwise calculate from population density
+def get_urgency(lat, lon, alert_severity=None):
+    """Calculate urgency level."""
     if alert_severity is not None:
         urgency = alert_severity
         if urgency >= 100:
@@ -33,18 +27,19 @@ def get_urgency(lat, lon, population_density=None, alert_severity=None):
             color = "#fbc02d"  # 🟡 Yellow
         else:
             color = "#388e3c"  # 🟢 Green
-    elif population_density > 4000:
-        urgency = 90 + random.uniform(0, 10)
-        color = "#d32f2f"
-    elif population_density > 2500:
-        urgency = 70 + random.uniform(0, 15)
-        color = "#f57c00"
-    elif population_density > 1000:
-        urgency = 50 + random.uniform(0, 15)
-        color = "#fbc02d"
     else:
-        urgency = 20 + random.uniform(0, 20)
-        color = "#388e3c"
+        # Default urgency based on distance from center
+        center_lat, center_lon = get_center_coordinates()
+        distance = ((lat - center_lat)**2 + (lon - center_lon)**2)**0.5
+        urgency = max(20, 100 - (distance * 1000))
+        if urgency >= 90:
+            color = "#d32f2f"
+        elif urgency >= 70:
+            color = "#f57c00"
+        elif urgency >= 50:
+            color = "#fbc02d"
+        else:
+            color = "#388e3c"
     return round(urgency, 1), color
 
 
@@ -52,23 +47,35 @@ def get_urgency(lat, lon, population_density=None, alert_severity=None):
 # ALERT SIMULATION
 # ───────────────────────────────────────────────
 def simulate_alert_updates():
-    """Simulate alert updates for demonstration purposes"""
-    # Update drone coordinates
-    alert_system.update_drone_coordinates(36.1627, -86.7816, altitude=100)
-    
-    # Simulate random alert generation
-    if random.random() < 0.5:  # 50% chance per refresh
-        alert = trigger_100_level_alert(
-            human_detected=random.choice([True, False]),
-            population_density=random.uniform(3000, 5000)
-        )
-        if alert:
-            st.toast(f"🚨 New Alert: {', '.join(alert['conditions'])}", icon="🚨")
+    """Run real detection once and update coordinates/alerts accordingly."""
+    try:
+        points = detect_human_heatmap_points()
+        if points:
+            st.toast("New Alert: Human detected", icon="🚨")
+            heat_key = 'human_heat_points'
+            if heat_key not in st.session_state:
+                st.session_state[heat_key] = []
+            st.session_state[heat_key].extend(points)
+            if len(st.session_state[heat_key]) > 500:
+                st.session_state[heat_key] = st.session_state[heat_key][-500:]
+            
+            from alert_system import trigger_100_level_alert
+            import time
+            for i, point in enumerate(points):
+                alert_system.update_drone_coordinates(point['lat'], point['lon'], altitude=100.0)
+                time.sleep(0.001)
+                trigger_100_level_alert(human_detected=True)
+            
+            st.sidebar.info(f"Human heat points: {len(st.session_state[heat_key])} (added {len(points)})")
+        else:
+            st.sidebar.info(f"Human heat points: {len(st.session_state.get('human_heat_points', []))}")
+    except Exception:
+        st.sidebar.info(f"Human heat points: {len(st.session_state.get('human_heat_points', []))}")
 
 # ───────────────────────────────────────────────
 # STREAMLIT UI
 # ───────────────────────────────────────────────
-st.title("🚑 EMS Urgency Map - Nashville, TN")
+st.title("🚑 EMS Urgency Map - Brentwood, TN")
 st.markdown("Building-level urgency visualization based on population density and live human detection")
 
 # Sidebar
@@ -89,38 +96,46 @@ if refresh:
 
 # Urgency legend
 st.sidebar.markdown("### Urgency Levels")
-st.sidebar.markdown("🔴 **Critical** (90-100): High density or alerts")
-st.sidebar.markdown("🟠 **High** (70-85): 2500-4000 people/sq mi")
-st.sidebar.markdown("🟡 **Medium** (50-65): 1000-2500 people/sq mi")
-st.sidebar.markdown("🟢 **Low** (20-40): <1000 people/sq mi")
+st.sidebar.markdown("🔴 **Critical** (90-100): Critical density and destruction")
+st.sidebar.markdown("🟠 **High** (70-85): High density and destruction")
+st.sidebar.markdown("🟡 **Medium** (50-65): Medium density and destruction")
+st.sidebar.markdown("🟢 **Low** (20-40): Low density and destruction")
 st.sidebar.markdown("🟣 **Survivor:** Potential survivor detected.")
 
 # ───────────────────────────────────────────────
 # GENERATE ALERT LOCATIONS (buildings + alerts)
 # ───────────────────────────────────────────────
-alert_locations = generate_nashville_buildings()
+alert_locations = []
+
+# Add heatmap dots to alert locations
+alert_locations.extend(generate_heatmap_dots())
 
 # Get active alerts and add them to locations
 active_alerts = alert_system.get_active_alerts()
 for alert in active_alerts:
+    survivor = any("Human detected" in cond for cond in alert.get('conditions', []))
     alert_locations.append({
         "lat": alert['coordinates']['lat'],
         "lon": alert['coordinates']['lon'],
         "name": f"Alert {alert['id']}",
         "alert_id": alert['id'],
         "alert_type": alert['type'],
-        "alert_severity": alert['severity']
+        "alert_severity": alert['severity'],
+        "survivor": survivor
     })
 
 # Assign urgency levels to all locations
 for location in alert_locations:
     if 'alert_severity' in location:
-        # Use alert severity for alert locations
         urgency, color = get_urgency(location["lat"], location["lon"], alert_severity=location['alert_severity'])
     else:
-        # Use population density for regular buildings
         urgency, color = get_urgency(location["lat"], location["lon"])
-    
+
+    # Survivor detected: force purple color and urgency 100
+    if location.get('survivor'):
+        urgency = 100
+        color = "#9c27b0"
+
     location["urgency"] = urgency
     location["color"] = color
 
@@ -139,7 +154,8 @@ geojson_data = {
                 "color": loc["color"],
                 "is_alert": "alert_id" in loc,
                 "alert_id": loc.get("alert_id", ""),
-                "alert_type": loc.get("alert_type", "")
+                "alert_type": loc.get("alert_type", ""),
+                "survivor": loc.get("survivor", False)
             }
         }
         for loc in alert_locations
@@ -170,31 +186,117 @@ map_html = f"""
         const map = new mapboxgl.Map({{
             container: 'map',
             style: 'mapbox://styles/mapbox/dark-v11',
-            center: [-86.7816, 36.1627],
+            center: [{get_center_coordinates()[1]}, {get_center_coordinates()[0]}],
             zoom: 12
         }});
         const geojsonData = {json.dumps(geojson_data)};
+        const humanHeatPoints = {json.dumps([
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [p["lon"], p["lat"]]},
+                "properties": {"weight": p["weight"]}
+            } for p in st.session_state.get('human_heat_points', [])
+        ])};
+        const humanHeatData = {{"type": "FeatureCollection", "features": humanHeatPoints}};
         map.on('load', () => {{
+            map.addSource('background-heatmap', {{
+                type: 'image',
+                url: 'data:image/png;base64,{base64.b64encode(open("assets/background.png", "rb").read()).decode()}',
+                coordinates: [
+                    [{get_center_coordinates()[1] - 0.067}, {get_center_coordinates()[0] + 0.067}],
+                    [{get_center_coordinates()[1] + 0.083}, {get_center_coordinates()[0] + 0.067}],
+                    [{get_center_coordinates()[1] + 0.083}, {get_center_coordinates()[0] - 0.083}],
+                    [{get_center_coordinates()[1] - 0.067}, {get_center_coordinates()[0] - 0.083}]
+                ]
+            }});
+            
+            map.addLayer({{
+                id: 'background-heatmap-layer',
+                type: 'raster',
+                source: 'background-heatmap',
+                paint: {{
+                    'raster-opacity': 0.6
+                }}
+            }});
+            
             map.addSource('buildings', {{ type: 'geojson', data: geojsonData }});
+            // Human detection heatmap source
+            map.addSource('human-heat', {{ type: 'geojson', data: humanHeatData }});
+            // Heatmap layer under points
+            map.addLayer({{
+                id: 'human-detection-heatmap',
+                type: 'heatmap',
+                source: 'human-heat',
+                maxzoom: 16,
+                paint: {{
+                    'heatmap-weight': ['coalesce', ['get', 'weight'], 0.4],
+                    'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 10, 2.0, 15, 5.0],
+                    'heatmap-color': [
+                        'interpolate', ['linear'], ['heatmap-density'],
+                        0.0, 'rgba(156,39,176,0.0)',
+                        0.1, 'rgba(156,39,176,0.4)',
+                        0.2, 'rgba(156,39,176,0.6)',
+                        0.4, 'rgba(211,47,47,0.7)',
+                        0.6, 'rgba(245,124,0,0.8)',
+                        0.8, 'rgba(251,192,45,0.9)',
+                        1.0, 'rgba(255,255,255,1.0)'
+                    ],
+                    'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 10, 20, 15, 40],
+                    'heatmap-opacity': 1.0
+                }}
+            }});
+            
+            // Add purple circles for individual human detections
+            map.addLayer({{
+                id: 'human-detection-points',
+                type: 'circle',
+                source: 'human-heat',
+                paint: {{
+                    'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 2, 15, 4],
+                    'circle-color': '#9c27b0',
+                    'circle-opacity': 0.8,
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': '#ffffff'
+                }}
+            }});
             map.addLayer({{
                 id: 'building-circles',
                 type: 'circle',
                 source: 'buildings',
                 paint: {{
-                    'circle-radius': ['interpolate',['linear'],['zoom'],10,6,15,12],
+                    'circle-radius': ['interpolate',['linear'],['zoom'],10,3,15,6],
                     'circle-color': ['get', 'color'],
                     'circle-opacity': 0.8,
-                    'circle-stroke-width': 2,
+                    'circle-stroke-width': 1,
                     'circle-stroke-color': '#ffffff'
                 }}
             }});
+            // Click handler for human detection points
+            map.on('click', 'human-detection-points', (e) => {{
+                const c = e.features[0].geometry.coordinates.slice();
+                const p = e.features[0].properties;
+                const html = `
+                    <div style="font-family: Arial; width: 200px;">
+                        <h4 style="color: #9c27b0; margin: 5px 0;">🟣 Human Detected</h4>
+                        <div style="padding: 5px; background: #f0f0f0; border-radius: 3px;">
+                            <b>Confidence: ${{(p.weight * 100).toFixed(1)}}%</b>
+                        </div>
+                        <hr style="margin: 8px 0;">
+                        <div style="font-size: 12px; color: #666;">
+                            Location: ${{c[1].toFixed(4)}}, ${{c[0].toFixed(4)}}
+                        </div>
+                    </div>
+                `;
+                new mapboxgl.Popup().setLngLat(c).setHTML(html).addTo(map);
+            }});
+            
             map.on('click', 'building-circles', (e) => {{
                 const c = e.features[0].geometry.coordinates.slice();
                 const p = e.features[0].properties;
                 let html = `<strong>${{p.name}}</strong><br><span style="color:${{p.color}};font-weight:bold;">Urgency: ${{p.urgency}}</span>`;
                 if (p.is_alert) {{
-                    if (p.urgency >= 100) {{
-                        html += `<br><span style="color:#9c27b0;font-weight:bold;">🟣 SURVIVOR DETECTED</span>`;
+                    if (p.survivor) {{
+                        html += `<br><span style="color:#9c27b0;font-weight:bold;">Survivor detected</span>`;
                     }} else {{
                         html += `<br><span style="color:#d32f2f;font-weight:bold;">ALERT: ${{p.alert_type}}</span>`;
                     }}
@@ -214,7 +316,8 @@ components.html(map_html, height=600)
 st.markdown("### 🚨 Alert Status")
 alert_summary = alert_system.get_alert_summary()
 col1, col2, col3 = st.columns(3)
-col1.metric("🟣 Active 100-Level Alerts", alert_summary['active_alerts'])
+survivor_alerts = len([alert for alert in active_alerts if any("Human detected" in cond for cond in alert.get('conditions', []))])
+col1.metric("🟣 Active Survivor Alerts", len(st.session_state.get('human_heat_points', [])))
 col2.metric("📊 Total Alerts Today", alert_summary['total_alerts'])
 if alert_summary['drone_coordinates']:
     col3.metric("📍 Drone Location", f"{alert_summary['drone_coordinates']['lat']:.4f}, {alert_summary['drone_coordinates']['lon']:.4f}")

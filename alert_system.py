@@ -14,7 +14,6 @@ class AlertSystem:
         self.drone_coordinates = None
         self.alert_thresholds = {
             'human_detection': True,
-            'high_density': 4000,
             'emergency_signal': True
         }
     
@@ -27,20 +26,13 @@ class AlertSystem:
             'timestamp': datetime.now().isoformat()
         }
     
-    def check_alert_conditions(self, human_detected: bool = False, population_density: float = 0) -> bool:
+    def check_alert_conditions(self, human_detected: bool = False) -> bool:
         """Check if conditions warrant a 100-level alert"""
         conditions_met = []
         
         # Condition 1: Human detected at drone location
         if human_detected and self.alert_thresholds['human_detection']:
             conditions_met.append("Human detected")
-        
-        # Condition 2: High population density at drone location
-        if population_density >= self.alert_thresholds['high_density']:
-            conditions_met.append(f"High density ({population_density:.0f} people/sq mi)")
-        
-        # Condition 3: Emergency signal detected (placeholder for future implementation)
-        # This could be expanded to include other emergency signals
         
         return len(conditions_met) > 0, conditions_met
     
@@ -50,7 +42,7 @@ class AlertSystem:
             raise ValueError("Drone coordinates not set")
         
         alert = {
-            'id': f"alert_{int(time.time())}",
+            'id': f"alert_{int(time.time() * 1000)}",
             'type': alert_type,
             'severity': severity,
             'coordinates': self.drone_coordinates.copy(),
@@ -102,9 +94,9 @@ async def monitor_for_alerts():
             print(f"Error in alert monitoring: {e}")
             await asyncio.sleep(5)
 
-def trigger_100_level_alert(human_detected: bool = False, population_density: float = 0) -> Optional[Dict]:
+def trigger_100_level_alert(human_detected: bool = False) -> Optional[Dict]:
     """Main function to trigger 100-level alerts"""
-    should_alert, conditions = alert_system.check_alert_conditions(human_detected, population_density)
+    should_alert, conditions = alert_system.check_alert_conditions(human_detected)
     
     if should_alert:
         alert = alert_system.create_alert(
