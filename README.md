@@ -26,11 +26,15 @@ Install dependencies:
 
 ```
 pip install -r requirements.txt
+sudo yum install -y mesa-libGLU     # On AWS workspace
+sudo yum install -y mesa-libGLU     # On AWS workspace
 ```
 ## Running the App
 
 1. Run `streamlit run app.py`
-2. Insert Mapbox API key (get an account here: https://console.mapbox.com/)
+2. Insert Mapbox API key 
+    1. Get an account here: https://console.mapbox.com/) OR use:
+    2. pk.eyJ1IjoiYmx1ZWNpY2FkYSIsImEiOiJjbWdmbzQzM2IwYWI5MnFvcmN3NGlrMW85In0.EVOuYdIm4CNDZdmJr_-GhQ
 
 ## Running the App
 
