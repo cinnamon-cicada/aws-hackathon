@@ -96,10 +96,10 @@ if refresh:
 
 # Urgency legend
 st.sidebar.markdown("### Urgency Levels")
-st.sidebar.markdown("🔴 **Critical** (90-100): High density or alerts")
-st.sidebar.markdown("🟠 **High** (70-85): 2500-4000 people/sq mi")
-st.sidebar.markdown("🟡 **Medium** (50-65): 1000-2500 people/sq mi")
-st.sidebar.markdown("🟢 **Low** (20-40): <1000 people/sq mi")
+st.sidebar.markdown("🔴 **Critical** (90-100): Critical density and destruction")
+st.sidebar.markdown("🟠 **High** (70-85): High density and destruction")
+st.sidebar.markdown("🟡 **Medium** (50-65): Medium density and destruction")
+st.sidebar.markdown("🟢 **Low** (20-40): Low density and destruction")
 st.sidebar.markdown("🟣 **Survivor:** Potential survivor detected.")
 
 # ───────────────────────────────────────────────
