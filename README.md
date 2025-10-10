@@ -1,4 +1,4 @@
-# AWS Hackathon
+# QUAKESENSE
 Time is of the essence after a natural disaster, especially for survivors. However, EMS responders often face limited resources. This easy-to-use pipeline will help them quickly find likely survivors.
 
 ## Workflow
