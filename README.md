@@ -1,6 +1,21 @@
-# AWS Hackathon - Simple App
+# AWS Hackathon
+Time is of the essence after a natural disaster, especially for survivors. However, EMS responders often face limited resources. This easy-to-use pipeline will help them quickly find likely survivors.
 
-This is a simple app for the AWS Hackathon. It demonstrates basic functionality and can be run locally or deployed to AWS.
+## Workflow
+The project is split into 3 stages.
+
+### Stage 1
+Destruction analysis using satellite images. A heatmap is generated based on 1) density of buildings and 2) location of destruction.
+
+### Stage 2
+Survivor detection using drone images. Points are added to the map if a potential survivor is detected. Via streamlit, the user can see a map of priority areas.
+
+### Stage 3
+AI agents synthesize the data from Stages 1 and 2. Here, the user can see auto-generated suggestions for next steps, based on images and analyses at any given moment.
+
+## Data Used
+- To generate the heatmaps, real photos from satellites were used. 
+- Photos captured by drones, with synthetically generated humans, were used to validate Stage 2. The one in use as of this GitHub commit is `assets/test1.png`
 
 ## Installation
 
@@ -77,4 +92,3 @@ This project is licensed under the MIT License.
 # ASSUMPTIONS
 1. We have pictures without cloud
 2. We have pictures before and after disaster
-3. EMS team has drones to send in
