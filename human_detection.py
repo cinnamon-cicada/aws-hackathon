@@ -186,13 +186,9 @@ async def monitor_drone_feed():
             print(f"[DRONE_MONITOR] Detection result: {humans_detected}, Confidence: {confidence:.4f}")
             
             if humans_detected:
-                # Calculate population density at drone location (mock)
-                population_density = random.uniform(3000, 5000)
-                
                 # Trigger 100-level alert
                 alert = trigger_100_level_alert(
-                    human_detected=True,
-                    population_density=population_density
+                    human_detected=True
                 )
                 
                 if alert:

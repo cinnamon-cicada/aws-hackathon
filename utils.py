@@ -7,6 +7,101 @@ import os
 import json
 from datetime import datetime
 
+def findImageLocations(image_path, base_color):
+    """Find locations of colored patches in the background image"""
+    import cv2
+    import numpy as np
+    
+    # Load the image
+    img = cv2.imread(image_path)
+    if img is None:
+        return []
+    
+    # Convert BGR to RGB
+    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    
+    # Define color ranges for each base color
+    color_ranges = {
+        "#d32f2f": {  # Red
+            "lower": np.array([200, 0, 0]),
+            "upper": np.array([255, 100, 100])
+        },
+        "#f57c00": {  # Orange
+            "lower": np.array([200, 100, 0]),
+            "upper": np.array([255, 200, 100])
+        },
+        "#fbc02d": {  # Yellow
+            "lower": np.array([200, 200, 0]),
+            "upper": np.array([255, 255, 150])
+        },
+        "#388e3c": {  # Green
+            "lower": np.array([0, 150, 0]),
+            "upper": np.array([100, 255, 100])
+        }
+    }
+    
+    if base_color not in color_ranges:
+        return []
+    
+    # Create mask for the color
+    mask = cv2.inRange(img_rgb, color_ranges[base_color]["lower"], color_ranges[base_color]["upper"])
+    
+    # Find contours
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    locations = []
+    center_lat, center_lon = get_center_coordinates()
+    
+    # Convert image coordinates to geographic coordinates
+    for i, contour in enumerate(contours):
+        if cv2.contourArea(contour) > 100:  # Filter small areas
+            # Get center of contour
+            M = cv2.moments(contour)
+            if M["m00"] != 0:
+                cx = int(M["m10"] / M["m00"])
+                cy = int(M["m01"] / M["m00"])
+                
+                img_height, img_width = img.shape[:2]
+                norm_x = cx / img_width
+                norm_y = cy / img_height
+                lon = center_lon + (norm_x * (0.067 + 0.083) - 0.067)
+                lat = center_lat - (norm_y * (0.067 + 0.083) - 0.067)
+                
+                locations.append({
+                    "lat": lat,
+                    "lon": lon,
+                    "name": f"{base_color} Zone {i+1}",
+                    "color": base_color
+                })
+    
+    return locations[:15]  # Limit to 15 dots per color
+
+def generate_heatmap_dots():
+    """Generate dots corresponding to colored patches on the background heatmap"""
+    dots = []
+    
+    # Define colors and their urgency levels
+    colors = {
+        "#d32f2f": (95, 5),    # Red: 95-100
+        "#f57c00": (75, 15),   # Orange: 75-90
+        "#fbc02d": (55, 15),   # Yellow: 55-70
+        "#388e3c": (25, 20)    # Green: 25-45
+    }
+    
+    # Find locations for each color
+    for color, (base_urgency, variance) in colors.items():
+        locations = findImageLocations("assets/background.png", color)
+        
+        for location in locations:
+            location["urgency"] = base_urgency + random.uniform(0, variance)
+            dots.append(location)
+    
+    return dots
+
+def get_center_coordinates():
+    """Get the center coordinates for the current area"""
+    return 36.0331, -86.7828  # Brentwood center
+
 def generate_nashville_buildings():
     """Generate sample building locations across Brentwood"""
     buildings = []

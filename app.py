@@ -1,8 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import json, random, time, base64
-from density import load_population_density, high_density_coordinates
-from utils import generate_nashville_buildings
+from utils import generate_nashville_buildings, get_center_coordinates, generate_heatmap_dots
 from alert_system import alert_system, trigger_100_level_alert
 from human_detection import detect_human_heatmap_points
 
@@ -14,14 +13,8 @@ st.set_page_config(page_title="EMS Urgency Map - Nashville", layout="wide")
 # ───────────────────────────────────────────────
 # URGENCY FUNCTION
 # ───────────────────────────────────────────────
-def get_urgency(lat, lon, population_density=None, alert_severity=None):
-    """Calculate urgency level based on population density and alert severity."""
-    if population_density is None:
-        downtown_lat, downtown_lon = 36.0331, -86.7828
-        distance = ((lat - downtown_lat)**2 + (lon - downtown_lon)**2)**0.5
-        population_density = max(0, 5000 - (distance * 10000)) + random.uniform(-500, 500)
-
-    # Use alert severity if available, otherwise calculate from population density
+def get_urgency(lat, lon, alert_severity=None):
+    """Calculate urgency level."""
     if alert_severity is not None:
         urgency = alert_severity
         if urgency >= 100:
@@ -34,18 +27,19 @@ def get_urgency(lat, lon, population_density=None, alert_severity=None):
             color = "#fbc02d"  # 🟡 Yellow
         else:
             color = "#388e3c"  # 🟢 Green
-    elif population_density > 4000:
-        urgency = 90 + random.uniform(0, 10)
-        color = "#d32f2f"
-    elif population_density > 2500:
-        urgency = 70 + random.uniform(0, 15)
-        color = "#f57c00"
-    elif population_density > 1000:
-        urgency = 50 + random.uniform(0, 15)
-        color = "#fbc02d"
     else:
-        urgency = 20 + random.uniform(0, 20)
-        color = "#388e3c"
+        # Default urgency based on distance from center
+        center_lat, center_lon = get_center_coordinates()
+        distance = ((lat - center_lat)**2 + (lon - center_lon)**2)**0.5
+        urgency = max(20, 100 - (distance * 1000))
+        if urgency >= 90:
+            color = "#d32f2f"
+        elif urgency >= 70:
+            color = "#f57c00"
+        elif urgency >= 50:
+            color = "#fbc02d"
+        else:
+            color = "#388e3c"
     return round(urgency, 1), color
 
 
@@ -70,7 +64,7 @@ def simulate_alert_updates():
             for i, point in enumerate(points):
                 alert_system.update_drone_coordinates(point['lat'], point['lon'], altitude=100.0)
                 time.sleep(0.001)
-                trigger_100_level_alert(human_detected=True, population_density=4000)
+                trigger_100_level_alert(human_detected=True)
             
             st.sidebar.info(f"Human heat points: {len(st.session_state[heat_key])} (added {len(points)})")
         else:
@@ -113,6 +107,9 @@ st.sidebar.markdown("🟣 **Survivor:** Potential survivor detected.")
 # ───────────────────────────────────────────────
 # alert_locations = generate_nashville_buildings()
 alert_locations = []
+
+# Add heatmap dots to alert locations
+alert_locations.extend(generate_heatmap_dots())
 
 # Get active alerts and add them to locations
 active_alerts = alert_system.get_active_alerts()
@@ -190,7 +187,7 @@ map_html = f"""
         const map = new mapboxgl.Map({{
             container: 'map',
             style: 'mapbox://styles/mapbox/dark-v11',
-            center: [-86.7828, 36.0331],
+            center: [{get_center_coordinates()[1]}, {get_center_coordinates()[0]}],
             zoom: 12
         }});
         const geojsonData = {json.dumps(geojson_data)};
@@ -207,10 +204,10 @@ map_html = f"""
                 type: 'image',
                 url: 'data:image/png;base64,{base64.b64encode(open("assets/background.png", "rb").read()).decode()}',
                 coordinates: [
-                    [-86.85, 36.10],
-                    [-86.70, 36.10],
-                    [-86.70, 35.95],
-                    [-86.85, 35.95]
+                    [{get_center_coordinates()[1] - 0.067}, {get_center_coordinates()[0] + 0.067}],
+                    [{get_center_coordinates()[1] + 0.083}, {get_center_coordinates()[0] + 0.067}],
+                    [{get_center_coordinates()[1] + 0.083}, {get_center_coordinates()[0] - 0.083}],
+                    [{get_center_coordinates()[1] - 0.067}, {get_center_coordinates()[0] - 0.083}]
                 ]
             }});
             
