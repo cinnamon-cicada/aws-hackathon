@@ -1,6 +1,6 @@
 import streamlit as st
 import streamlit.components.v1 as components
-import json, random, time
+import json, random, time, base64
 from density import load_population_density, high_density_coordinates
 from utils import generate_nashville_buildings
 from alert_system import alert_system, trigger_100_level_alert
@@ -97,7 +97,6 @@ if refresh:
 
 # Urgency legend
 st.sidebar.markdown("### Urgency Levels")
-st.sidebar.markdown("🟣 **Survivor detected**: Human detected")
 st.sidebar.markdown("🔴 **Critical** (90-100): High density or alerts")
 st.sidebar.markdown("🟠 **High** (70-85): 2500-4000 people/sq mi")
 st.sidebar.markdown("🟡 **Medium** (50-65): 1000-2500 people/sq mi")
@@ -107,7 +106,8 @@ st.sidebar.markdown("🟣 **Survivor:** Potential survivor detected.")
 # ───────────────────────────────────────────────
 # GENERATE ALERT LOCATIONS (buildings + alerts)
 # ───────────────────────────────────────────────
-alert_locations = generate_nashville_buildings()
+# alert_locations = generate_nashville_buildings()
+alert_locations = []
 
 # Get active alerts and add them to locations
 active_alerts = alert_system.get_active_alerts()
@@ -198,6 +198,26 @@ map_html = f"""
         ])};
         const humanHeatData = {{"type": "FeatureCollection", "features": humanHeatPoints}};
         map.on('load', () => {{
+            map.addSource('background-heatmap', {{
+                type: 'image',
+                url: 'data:image/png;base64,{base64.b64encode(open("assets/background.png", "rb").read()).decode()}',
+                coordinates: [
+                    [-86.85, 36.22],
+                    [-86.70, 36.22],
+                    [-86.70, 36.10],
+                    [-86.85, 36.10]
+                ]
+            }});
+            
+            map.addLayer({{
+                id: 'background-heatmap-layer',
+                type: 'raster',
+                source: 'background-heatmap',
+                paint: {{
+                    'raster-opacity': 0.6
+                }}
+            }});
+            
             map.addSource('buildings', {{ type: 'geojson', data: geojsonData }});
             // Human detection heatmap source
             map.addSource('human-heat', {{ type: 'geojson', data: humanHeatData }});
