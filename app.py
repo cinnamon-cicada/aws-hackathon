@@ -1,7 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import json, random, time, base64
-from utils import generate_nashville_buildings, get_center_coordinates, generate_heatmap_dots
+from utils import get_center_coordinates, generate_heatmap_dots
 from alert_system import alert_system, trigger_100_level_alert
 from human_detection import detect_human_heatmap_points
 
@@ -105,7 +105,6 @@ st.sidebar.markdown("🟣 **Survivor:** Potential survivor detected.")
 # ───────────────────────────────────────────────
 # GENERATE ALERT LOCATIONS (buildings + alerts)
 # ───────────────────────────────────────────────
-# alert_locations = generate_nashville_buildings()
 alert_locations = []
 
 # Add heatmap dots to alert locations

@@ -75,4 +75,6 @@ This project is licensed under the MIT License.
 
 
 # ASSUMPTIONS
-1. 
+1. We have pictures without cloud
+2. We have pictures before and after disaster
+3. EMS team has drones to send in

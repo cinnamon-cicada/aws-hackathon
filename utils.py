@@ -102,26 +102,6 @@ def get_center_coordinates():
     """Get the center coordinates for the current area"""
     return 36.0331, -86.7828  # Brentwood center
 
-def generate_nashville_buildings():
-    """Generate sample building locations across Brentwood"""
-    buildings = []
-    # Brentwood bounds approximately
-    lat_min, lat_max = 35.95, 36.10
-    lon_min, lon_max = -86.85, -86.70
-    
-    # Generate grid of buildings
-    for i in range(50):
-        lat = random.uniform(lat_min, lat_max)
-        lon = random.uniform(lon_min, lon_max)
-        
-        buildings.append({
-            "lat": lat,
-            "lon": lon,
-            "name": f"Building {i+1}"
-        })
-    
-    return buildings
-
 def makeJSON(heatmap_points, input_image_path, output_path="detections_output.json"):
     """
     Create a JSON file with detection data in the specified format.
