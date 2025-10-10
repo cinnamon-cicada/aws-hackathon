@@ -51,26 +51,42 @@ def simulate_alert_updates():
     try:
         points = detect_human_heatmap_points()
         if points:
-            st.toast("New Alert: Human detected", icon="🚨")
             heat_key = 'human_heat_points'
             if heat_key not in st.session_state:
                 st.session_state[heat_key] = []
-            st.session_state[heat_key].extend(points)
-            if len(st.session_state[heat_key]) > 500:
-                st.session_state[heat_key] = st.session_state[heat_key][-500:]
             
-            from alert_system import trigger_100_level_alert
-            import time
-            for i, point in enumerate(points):
-                alert_system.update_drone_coordinates(point['lat'], point['lon'], altitude=100.0)
-                time.sleep(0.001)
-                trigger_100_level_alert(human_detected=True)
+            # Filter out duplicate points using pixel buffer
+            existing_points = st.session_state[heat_key]
+            new_points = []
+            pixel_buffer = 0.0001  # ~50 pixels at zoom 15
             
-            st.sidebar.info(f"Human heat points: {len(st.session_state[heat_key])} (added {len(points)})")
-        else:
-            st.sidebar.info(f"Human heat points: {len(st.session_state.get('human_heat_points', []))}")
+            for point in points:
+                is_duplicate = False
+                for existing in existing_points:
+                    lat_diff = abs(point['lat'] - existing['lat'])
+                    lon_diff = abs(point['lon'] - existing['lon'])
+                    
+                    if lat_diff < pixel_buffer and lon_diff < pixel_buffer:
+                        is_duplicate = True
+                        break
+                
+                if not is_duplicate:
+                    new_points.append(point)
+            
+            # Only add new points and trigger alerts
+            if new_points:
+                st.session_state[heat_key].extend(new_points)
+                if len(st.session_state[heat_key]) > 500:
+                    st.session_state[heat_key] = st.session_state[heat_key][-500:]
+                
+                from alert_system import trigger_100_level_alert
+                import time
+                for i, point in enumerate(new_points):
+                    alert_system.update_drone_coordinates(point['lat'], point['lon'], altitude=100.0)
+                    time.sleep(0.001)
+                    trigger_100_level_alert(human_detected=True)
     except Exception:
-        st.sidebar.info(f"Human heat points: {len(st.session_state.get('human_heat_points', []))}")
+        pass
 
 # ───────────────────────────────────────────────
 # STREAMLIT UI
@@ -358,7 +374,40 @@ for i, loc in enumerate(sorted_locations, 1):
     alert_indicator = " 🚨" if "alert_id" in loc else ""
     st.markdown(f"{i}. **{loc['name']}**{alert_indicator} - Urgency: {loc['urgency']} (Lat: {loc['lat']:.4f}, Lon: {loc['lon']:.4f})")
 
+
 # ───────────────────────────────────────────────
-# MANUAL REFRESH ONLY
+# AUTO-REFRESH TIMER
 # ───────────────────────────────────────────────
-# Alert updates are handled manually via the refresh button
+if 'last_auto_refresh' not in st.session_state:
+    st.session_state.last_auto_refresh = time.time()
+
+# Check if 30 seconds have passed
+current_time = time.time()
+time_elapsed = current_time - st.session_state.last_auto_refresh
+
+if time_elapsed >= 30:
+    # Run detection
+    old_count = len(st.session_state.get('human_heat_points', []))
+    simulate_alert_updates()
+    new_count = len(st.session_state.get('human_heat_points', []))
+    
+    # Update timer
+    st.session_state.last_auto_refresh = current_time
+    
+    # Show notification if new detections
+    if new_count > old_count:
+        st.toast(f"🚨 {new_count - old_count} new human(s) detected", icon="🚨")
+    
+    # Force rerun to update map
+    st.rerun()
+
+# Display timer in sidebar
+with st.sidebar:
+    st.markdown("---")
+    st.info(f"🔍 Human heat points: {len(st.session_state.get('human_heat_points', []))}")
+    time_until_next = max(0, 30 - time_elapsed)
+    st.caption(f"⏱️ Next auto-refresh in: {int(time_until_next)}s")
+
+# Add a small sleep and rerun to keep checking the timer
+time.sleep(1)
+st.rerun()

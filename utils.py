@@ -6,6 +6,8 @@ from PIL import Image
 import os
 import json
 from datetime import datetime
+import time
+import streamlit as st
 
 def findImageLocations(image_path, base_color):
     """Find locations of colored patches in the background image"""
