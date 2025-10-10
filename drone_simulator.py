@@ -5,7 +5,7 @@ import random
 
 
 class DroneSimulator:
-    def __init__(self, start_lat: float = 36.1627, start_lon: float = -86.7816, altitude: float = 100.0,
+    def __init__(self, start_lat: float = 36.0331, start_lon: float = -86.7828, altitude: float = 100.0,
                  video_path: str = "assets/human_passby.mp4"):
         self.lat = start_lat
         self.lon = start_lon

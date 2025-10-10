@@ -1,0 +1,57 @@
+{
+  "detections": [
+    {
+      "id": 1,
+      "x": 242,
+      "y": 179,
+      "confidence": 0.97
+    },
+    {
+      "id": 2,
+      "x": 277,
+      "y": 232,
+      "confidence": 0.95
+    },
+    {
+      "id": 3,
+      "x": 107,
+      "y": 111,
+      "confidence": 0.93
+    },
+    {
+      "id": 4,
+      "x": 180,
+      "y": 157,
+      "confidence": 0.88
+    },
+    {
+      "id": 5,
+      "x": 188,
+      "y": 204,
+      "confidence": 0.84
+    },
+    {
+      "id": 6,
+      "x": 1,
+      "y": 128,
+      "confidence": 0.82
+    },
+    {
+      "id": 7,
+      "x": 130,
+      "y": 16,
+      "confidence": 0.82
+    },
+    {
+      "id": 8,
+      "x": 356,
+      "y": 208,
+      "confidence": 0.78
+    }
+  ],
+  "metadata": {
+    "image_width": 397,
+    "image_height": 396,
+    "timestamp": "2025-10-10T00:19:50Z"
+  }
+}

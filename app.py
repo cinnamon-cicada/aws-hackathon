@@ -17,7 +17,7 @@ st.set_page_config(page_title="EMS Urgency Map - Nashville", layout="wide")
 def get_urgency(lat, lon, population_density=None, alert_severity=None):
     """Calculate urgency level based on population density and alert severity."""
     if population_density is None:
-        downtown_lat, downtown_lon = 36.1627, -86.7816
+        downtown_lat, downtown_lon = 36.0331, -86.7828
         distance = ((lat - downtown_lat)**2 + (lon - downtown_lon)**2)**0.5
         population_density = max(0, 5000 - (distance * 10000)) + random.uniform(-500, 500)
 
@@ -54,19 +54,24 @@ def get_urgency(lat, lon, population_density=None, alert_severity=None):
 # ───────────────────────────────────────────────
 def simulate_alert_updates():
     """Run real detection once and update coordinates/alerts accordingly."""
-    # Collect all detection points for heatmap (non-blocking if fails)
     try:
         points = detect_human_heatmap_points()
         if points:
-            st.toast("🚨 New Alert: Human detected", icon="🚨")
+            st.toast("New Alert: Human detected", icon="🚨")
             heat_key = 'human_heat_points'
             if heat_key not in st.session_state:
                 st.session_state[heat_key] = []
-            # Add all points at once
             st.session_state[heat_key].extend(points)
-            # Cap list to avoid unbounded growth
             if len(st.session_state[heat_key]) > 500:
                 st.session_state[heat_key] = st.session_state[heat_key][-500:]
+            
+            from alert_system import trigger_100_level_alert
+            import time
+            for i, point in enumerate(points):
+                alert_system.update_drone_coordinates(point['lat'], point['lon'], altitude=100.0)
+                time.sleep(0.001)
+                trigger_100_level_alert(human_detected=True, population_density=4000)
+            
             st.sidebar.info(f"Human heat points: {len(st.session_state[heat_key])} (added {len(points)})")
         else:
             st.sidebar.info(f"Human heat points: {len(st.session_state.get('human_heat_points', []))}")
@@ -76,7 +81,7 @@ def simulate_alert_updates():
 # ───────────────────────────────────────────────
 # STREAMLIT UI
 # ───────────────────────────────────────────────
-st.title("🚑 EMS Urgency Map - Nashville, TN")
+st.title("🚑 EMS Urgency Map - Brentwood, TN")
 st.markdown("Building-level urgency visualization based on population density and live human detection")
 
 # Sidebar
@@ -185,7 +190,7 @@ map_html = f"""
         const map = new mapboxgl.Map({{
             container: 'map',
             style: 'mapbox://styles/mapbox/dark-v11',
-            center: [-86.7816, 36.1627],
+            center: [-86.7828, 36.0331],
             zoom: 12
         }});
         const geojsonData = {json.dumps(geojson_data)};
@@ -202,10 +207,10 @@ map_html = f"""
                 type: 'image',
                 url: 'data:image/png;base64,{base64.b64encode(open("assets/background.png", "rb").read()).decode()}',
                 coordinates: [
-                    [-86.85, 36.22],
-                    [-86.70, 36.22],
+                    [-86.85, 36.10],
                     [-86.70, 36.10],
-                    [-86.85, 36.10]
+                    [-86.70, 35.95],
+                    [-86.85, 35.95]
                 ]
             }});
             
@@ -251,10 +256,10 @@ map_html = f"""
                 type: 'circle',
                 source: 'human-heat',
                 paint: {{
-                    'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 4, 15, 8],
+                    'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 2, 15, 4],
                     'circle-color': '#9c27b0',
                     'circle-opacity': 0.8,
-                    'circle-stroke-width': 2,
+                    'circle-stroke-width': 1,
                     'circle-stroke-color': '#ffffff'
                 }}
             }});
@@ -263,10 +268,10 @@ map_html = f"""
                 type: 'circle',
                 source: 'buildings',
                 paint: {{
-                    'circle-radius': ['interpolate',['linear'],['zoom'],10,6,15,12],
+                    'circle-radius': ['interpolate',['linear'],['zoom'],10,3,15,6],
                     'circle-color': ['get', 'color'],
                     'circle-opacity': 0.8,
-                    'circle-stroke-width': 2,
+                    'circle-stroke-width': 1,
                     'circle-stroke-color': '#ffffff'
                 }}
             }});
@@ -315,7 +320,8 @@ components.html(map_html, height=600)
 st.markdown("### 🚨 Alert Status")
 alert_summary = alert_system.get_alert_summary()
 col1, col2, col3 = st.columns(3)
-col1.metric("🟣 Active 100-Level Alerts", alert_summary['active_alerts'])
+survivor_alerts = len([alert for alert in active_alerts if any("Human detected" in cond for cond in alert.get('conditions', []))])
+col1.metric("🟣 Active Survivor Alerts", len(st.session_state.get('human_heat_points', [])))
 col2.metric("📊 Total Alerts Today", alert_summary['total_alerts'])
 if alert_summary['drone_coordinates']:
     col3.metric("📍 Drone Location", f"{alert_summary['drone_coordinates']['lat']:.4f}, {alert_summary['drone_coordinates']['lon']:.4f}")

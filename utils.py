@@ -8,10 +8,10 @@ import json
 from datetime import datetime
 
 def generate_nashville_buildings():
-    """Generate sample building locations across Nashville"""
+    """Generate sample building locations across Brentwood"""
     buildings = []
-    # Nashville bounds approximately
-    lat_min, lat_max = 36.10, 36.22
+    # Brentwood bounds approximately
+    lat_min, lat_max = 35.95, 36.10
     lon_min, lon_max = -86.85, -86.70
     
     # Generate grid of buildings
@@ -50,8 +50,8 @@ def makeJSON(heatmap_points, input_image_path, output_path="detections_output.js
         print(f"[MAKEJSON] Input image dimensions: {width}x{height}")
         
         # Use input image bounds (same as in detection function)
-        center_lat = 36.1627  # Nashville center
-        center_lon = -86.7816
+        center_lat = 36.0331  # Brentwood center
+        center_lon = -86.7828
         
         image_bounds = {
             'north': center_lat + 0.01,

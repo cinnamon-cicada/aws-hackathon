@@ -50,7 +50,7 @@ class AlertSystem:
             raise ValueError("Drone coordinates not set")
         
         alert = {
-            'id': f"alert_{int(time.time())}",
+            'id': f"alert_{int(time.time() * 1000)}",
             'type': alert_type,
             'severity': severity,
             'coordinates': self.drone_coordinates.copy(),

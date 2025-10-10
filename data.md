@@ -1,7 +1,7 @@
 # Technical Stack Documentation
 
 ## Project Overview
-This is an AWS Hackathon project for an EMS (Emergency Medical Services) Urgency Map system focused on disaster response in Nashville, TN. The system provides real-time visualization of emergency situations, human detection, and alert management.
+This is an AWS Hackathon project for an EMS (Emergency Medical Services) Urgency Map system focused on disaster response in Brentwood, TN. The system provides real-time visualization of emergency situations, human detection, and alert management.
 
 ## Core Technologies
 
